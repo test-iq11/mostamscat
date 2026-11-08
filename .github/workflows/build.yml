@@ -1,4 +1,5 @@
-name: Build Mustamsakati APK From ZIP
+
+name: Build Mustamsakati APK
 
 on:
   workflow_dispatch:
@@ -11,74 +12,187 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Prepare Flutter and Android toolchain
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      - name: Find and extract ZIP automatically
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      - name: Install Java 17
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import os
+          import shutil
+          import sys
+          import zipfile
+
+          repo = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          temp = Path(os.environ["RUNNER_TEMP"])
+          dest = temp / "build_project"
+
+          print("Repository files:")
+          for p in sorted(repo.rglob("*")):
+              if p.is_file() and ".git" not in p.parts:
+                  print(p.relative_to(repo))
+
+          archives = sorted(
+              p for p in repo.rglob("*")
+              if p.is_file()
+              and p.suffix.lower() == ".zip"
+              and ".git" not in p.relative_to(repo).parts
+          )
+
+          candidates = []
+
+          for archive in archives:
+              try:
+                  with zipfile.ZipFile(archive) as z:
+                      names = {
+                          n.replace("\\", "/")
+                          for n in z.namelist()
+                      }
+
+                      for name in names:
+                          if name == "pubspec.yaml" or name.endswith("/pubspec.yaml"):
+                              prefix = name[:-len("pubspec.yaml")]
+
+                              required = [
+                                  prefix + "lib/main.dart",
+                                  prefix + "assets/app/index.html",
+                              ]
+
+                              if all(x in names for x in required):
+                                  candidates.append((archive, prefix))
+                                  break
+
+              except (zipfile.BadZipFile, OSError) as e:
+                  print("Skipping:", archive, e)
+
+          if not candidates:
+              print("ERROR: No valid Flutter ZIP found.")
+              print("Upload the ZIP to this repository and branch.")
+              print("ZIP files found:", archives)
+              sys.exit(1)
+
+          candidates.sort(
+              key=lambda x: (
+                  x[0].name.lower() == "mustamsakati.zip",
+                  "mustamsakati" in x[0].name.lower(),
+                  x[0].stat().st_mtime,
+              ),
+              reverse=True,
+          )
+
+          archive, prefix = candidates[0]
+
+          print("Selected ZIP:", archive)
+          print("Project folder:", prefix)
+
+          extraction = temp / "extracted_project"
+
+          if extraction.exists():
+              shutil.rmtree(extraction)
+
+          extraction.mkdir(parents=True)
+
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise RuntimeError("Damaged ZIP entry: " + bad)
+
+              for item in z.infolist():
+                  path = PurePosixPath(
+                      item.filename.replace("\\", "/")
+                  )
+                  if path.is_absolute() or ".." in path.parts:
+                      raise RuntimeError("Unsafe ZIP entry")
+
+              z.extractall(extraction)
+
+          project = extraction / prefix
+
+          if dest.exists():
+              shutil.rmtree(dest)
+
+          shutil.copytree(project, dest)
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"PROJECT_DIR={dest}\n")
+
+          print("Project successfully extracted:", dest)
+          PY
+
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Extract ZIP without manual extraction
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARCHIVE="$(find . -maxdepth 1 -type f -name 'mustamsakati.zip' -print -quit)"
-          if [[ -z "$ARCHIVE" ]]; then
-            echo 'Upload mustamsakati.zip to repository root WITHOUT extracting'
-            exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/mustamsakati_unpacked"
-          unzip -q "$ARCHIVE" -d "$RUNNER_TEMP/mustamsakati_unpacked"
-          APP_DIR="$(find "$RUNNER_TEMP/mustamsakati_unpacked" -name pubspec.yaml -print -quit | xargs -r dirname)"
-          if [[ -z "$APP_DIR" || ! -f "$APP_DIR/lib/main.dart" || ! -f "$APP_DIR/assets/app/index.html" ]]; then
-            echo 'A valid Flutter project with pubspec.yaml, lib/main.dart, HTML asset is missing'; exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/build_project"
-          cp -a "$APP_DIR/." "$RUNNER_TEMP/build_project/"
-          echo "PROJECT_DIR=$RUNNER_TEMP/build_project" >> "$GITHUB_ENV"
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-      - name: Supply official Gradle wrapper jar matching Flutter
+      - name: Prepare Android project
         shell: bash
         run: |
           set -euo pipefail
-          flutter create --project-name mustamsakati --org iq.mustamsakati --platforms android --no-pub "$RUNNER_TEMP/android_scaffold"
+
+          flutter --version
+
+          flutter create \
+            --project-name mustamsakati \
+            --org iq.mustamsakati \
+            --platforms android \
+            --no-pub \
+            "$RUNNER_TEMP/android_scaffold"
+
           mkdir -p "$PROJECT_DIR/android/gradle/wrapper"
-          cp "$RUNNER_TEMP/android_scaffold/android/gradle/wrapper/gradle-wrapper.jar" "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.jar"
-          cp "$RUNNER_TEMP/android_scaffold/android/gradlew" "$PROJECT_DIR/android/gradlew"
+
+          cp \
+            "$RUNNER_TEMP/android_scaffold/android/gradle/wrapper/gradle-wrapper.jar" \
+            "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.jar"
+
+          cp \
+            "$RUNNER_TEMP/android_scaffold/android/gradlew" \
+            "$PROJECT_DIR/android/gradlew"
+
           chmod +x "$PROJECT_DIR/android/gradlew"
+
           FLUTTER_ROOT="$(cd "$(dirname "$(command -v flutter)")/.." && pwd)"
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          if [[ -z "$SDK_ROOT" ]]; then echo 'Android SDK missing'; exit 1; fi
-          printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$FLUTTER_ROOT" "$SDK_ROOT" > "$PROJECT_DIR/android/local.properties"
-          echo "Flutter: $(flutter --version | head -n 1)"
 
-      - name: Resolve dependencies
+          if [[ -z "$SDK_ROOT" ]]; then
+            echo "Android SDK missing"
+            exit 1
+          fi
+
+          printf 'flutter.sdk=%s\nsdk.dir=%s\n' \
+            "$FLUTTER_ROOT" "$SDK_ROOT" \
+            > "$PROJECT_DIR/android/local.properties"
+
+      - name: Install dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      - name: Analyze strictly
+      - name: Analyze code
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter analyze
+        run: flutter analyze --no-pub
 
-      - name: Run unit and asset tests
+      - name: Run tests
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter test
+        run: flutter test --no-pub
 
-      - name: Build APK
+      - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release
+        run: flutter build apk --release --no-pub
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: mustamsakati-release-apk
