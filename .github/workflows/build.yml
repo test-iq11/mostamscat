@@ -1,4 +1,4 @@
-name: Build Mustamsakati Native Flutter APK
+name: Build Mustamsakati Flutter Native v6 APK
 
 on:
   workflow_dispatch:
@@ -43,7 +43,8 @@ jobs:
                               prefix = n[:-len('pubspec.yaml')]
                               if all(prefix + x in files for x in
                                      ('lib/main.dart', 'lib/perspective.dart',
-                                      'lib/layouts.dart', 'lib/exporters.dart')):
+                                      'lib/layouts.dart', 'lib/exporters.dart',
+                                      'assets/demo/sample_front.jpg')):
                                   candidates.append((archive, prefix))
                                   print('Eligible native project:', archive, 'root:', prefix)
                                   break
@@ -51,11 +52,18 @@ jobs:
                   print('Not a readable ZIP:', archive, exc)
           if not candidates:
               sys.exit('::error::Native Flutter ZIP not found in current branch. '
-                       'Upload the new mustamsakati.zip file, without extraction.')
-          # Select the latest modified eligible ZIP (not an obsolete WebView project).
-          archive, prefix = sorted(candidates,
-              key=lambda item: (item[0].stat().st_mtime,
-                                item[0].name.lower()), reverse=True)[0]
+                       'Upload mustamsakati-flutter-v6-native.zip to the SAME branch, without extraction.')
+          # Prefer the new v6 native project even when older ZIP files remain.
+          def project_rank(item):
+              archive, prefix = item
+              with zipfile.ZipFile(archive) as z:
+                  manifest = z.read(prefix + 'pubspec.yaml').decode('utf-8')
+              return (
+                  'version: 6.' in manifest,
+                  'mustamsakati' in archive.name.lower(),
+                  archive.name.lower(),
+              )
+          archive, prefix = max(candidates, key=project_rank)
           extracted = Path(os.environ['RUNNER_TEMP']) / 'native_unzipped'
           output = Path(os.environ['RUNNER_TEMP']) / 'build_project'
           if extracted.exists():
@@ -127,40 +135,30 @@ jobs:
           test -f android/settings.gradle.kts -o -f android/settings.gradle
           test -f android/app/src/main/AndroidManifest.xml
 
-      - name: Use smaller Gradle distribution with retries (avoid GitHub 504)
+      - name: Make Gradle download resilient
         shell: bash
         run: |
           set -euo pipefail
-          cd "$PROJECT_DIR"
-          python3 - <<'PYGRADLE'
+          python3 - <<'PY'
           from pathlib import Path
-          import re
-          import sys
-
-          wrapper = Path('android/gradle/wrapper/gradle-wrapper.properties')
-          if not wrapper.is_file():
-              sys.exit('::error::Gradle wrapper properties not found after flutter create')
-          settings = wrapper.read_text(encoding='utf-8')
-          match = re.search(r'^distributionUrl=.*?/gradle-(\d+(?:\.\d+){1,2})-(?:all|bin)\.zip\s*$', settings, re.M)
-          if not match:
-              print(settings)
-              sys.exit('::error::Unknown Gradle distribution URL. Refusing to guess Gradle version.')
-          version = match.group(1)
-          # Keep the Gradle version selected by Flutter to avoid AGP compatibility issues.
+          import os, re
+          p = Path(os.environ['PROJECT_DIR']) / 'android/gradle/wrapper/gradle-wrapper.properties'
+          text = p.read_text()
+          pattern = r'gradle-(\d+(?:\.\d+){1,2})-(?:all|bin)\.zip'
+          hit = re.search(pattern, text)
+          if hit is None:
+              raise RuntimeError('Expected Gradle distribution was not found')
+          version = hit.group(1)
           url = f'https\\://downloads.gradle.org/distributions/gradle-{version}-bin.zip'
-          settings = re.sub(r'^distributionUrl=.*$', 'distributionUrl=' + url, settings, count=1, flags=re.M)
-          for key, value in [('networkTimeout', '120000'), ('retries', '5'), ('retryBackOffMs', '2000')]:
-              line = f'{key}={value}'
-              if re.search(rf'^{key}=.*$', settings, re.M):
-                  settings = re.sub(rf'^{key}=.*$', line, settings, count=1, flags=re.M)
-              else:
-                  settings = settings.rstrip() + '\n' + line + '\n'
-          wrapper.write_text(settings, encoding='utf-8')
-          print('Gradle version retained:', version)
-          print('New Gradle distribution: https://downloads.gradle.org/distributions/gradle-' + version + '-bin.zip')
-          print('Network timeout and automatic download retries enabled.')
-          PYGRADLE
-          cat android/gradle/wrapper/gradle-wrapper.properties
+          text = re.sub(r'^distributionUrl=.*$', lambda _: 'distributionUrl=' + url,
+                        text, count=1, flags=re.M)
+          text = re.sub(r'^distributionSha256Sum=.*\n?', '', text, flags=re.M)
+          for option, val in [('networkTimeout','120000'), ('retries','5'), ('retryBackOffMs','2000')]:
+              text = re.sub(r'^' + option + r'=.*\n?', '', text, flags=re.M)
+              text += f'\n{option}={val}\n'
+          p.write_text(text)
+          print('Gradle distribution:', version, '(bin, retry enabled)')
+          PY
 
       - name: Install Flutter packages
         shell: bash
@@ -174,7 +172,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          flutter analyze --no-fatal-infos
+          flutter analyze
 
       - name: Run native Flutter unit tests
         shell: bash
@@ -194,7 +192,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: mustamsakati-native-apk
+          name: mustamsakati-v6-native-apk
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
