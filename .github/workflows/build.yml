@@ -1,4 +1,4 @@
-name: Build Mustamsakati Flutter Native v7.1.1 APK
+name: Build Mustamsakati Flutter Native v7.1.2 APK
 
 on:
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
                   print('Not a readable ZIP:', archive, exc)
           if not candidates:
               sys.exit('::error::Native Flutter ZIP not found in current branch. '
-                       'Upload the corrected mustamsakati Flutter v7.1.1 ZIP to the SAME branch, without extraction.')
+                       'Upload the corrected mustamsakati Flutter v7.1.2 ZIP to the SAME branch, without extraction.')
           # Select the greatest numeric pubspec version, so a previous ZIP
           # cannot silently override the corrected project during CI.
           import re
@@ -72,8 +72,8 @@ jobs:
               return (*numbers, archive.name.lower())
           archive, prefix = max(candidates, key=project_rank)
           chosen_version = project_rank((archive, prefix))[:4]
-          if chosen_version < (7, 1, 1, 4):
-              sys.exit('::error::Flutter project v7.1.1+3 was not found. Upload the corrected ZIP on this branch.')
+          if chosen_version < (7, 1, 2, 5):
+              sys.exit('::error::Flutter project v7.1.2+5 was not found. Upload the corrected ZIP on this branch.')
           extracted = Path(os.environ['RUNNER_TEMP']) / 'native_unzipped'
           output = Path(os.environ['RUNNER_TEMP']) / 'build_project'
           if extracted.exists():
@@ -214,7 +214,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: mustamsakati-v7.1.1-native-apk
+          name: mustamsakati-v7.1.2-native-apk
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
