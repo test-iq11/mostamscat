@@ -32,9 +32,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ARCHIVE="$(find . -maxdepth 1 -type f -name 'mustamsakati-flutter-v*.zip' -print -quit)"
+          ARCHIVE="$(find . -maxdepth 1 -type f -name 'mustamsakati.zip' -print -quit)"
           if [[ -z "$ARCHIVE" ]]; then
-            echo 'Upload mustamsakati-flutter-v4.0.0.zip to repository root WITHOUT extracting'
+            echo 'Upload mustamsakati.zip to repository root WITHOUT extracting'
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/mustamsakati_unpacked"
