@@ -53,16 +53,20 @@ jobs:
           if not candidates:
               sys.exit('::error::Native Flutter ZIP not found in current branch. '
                        'Upload mustamsakati-flutter-v6-native.zip to the SAME branch, without extraction.')
-          # Prefer the new v6 native project even when older ZIP files remain.
+          # Select the greatest numeric pubspec version, so a previous ZIP
+          # cannot silently override the corrected project during CI.
+          import re
           def project_rank(item):
               archive, prefix = item
               with zipfile.ZipFile(archive) as z:
                   manifest = z.read(prefix + 'pubspec.yaml').decode('utf-8')
-              return (
-                  'version: 6.' in manifest,
-                  'mustamsakati' in archive.name.lower(),
-                  archive.name.lower(),
-              )
+              version_match = re.search(
+                  r'^version:\s*(\d+)\.(\d+)\.(\d+)(?:\+(\d+))?',
+                  manifest, re.M)
+              if not version_match:
+                  return (0, 0, 0, 0, archive.name.lower())
+              numbers = tuple(int(n or 0) for n in version_match.groups())
+              return (*numbers, archive.name.lower())
           archive, prefix = max(candidates, key=project_rank)
           extracted = Path(os.environ['RUNNER_TEMP']) / 'native_unzipped'
           output = Path(os.environ['RUNNER_TEMP']) / 'build_project'
@@ -80,7 +84,7 @@ jobs:
           if output.exists():
               shutil.rmtree(output)
           shutil.copytree(extracted / prefix, output)
-          print('Using native Flutter project:', archive)
+          print('Using native Flutter project:', archive, 'version:', project_rank((archive, prefix))[:4])
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write('PROJECT_DIR=' + str(output) + '\n')
           PY
