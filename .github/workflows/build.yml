@@ -1,4 +1,4 @@
-name: Build Mustamsakati Flutter Native v6 APK
+name: Build Mustamsakati Flutter Native v6.1 APK
 
 on:
   workflow_dispatch:
@@ -44,7 +44,8 @@ jobs:
                               if all(prefix + x in files for x in
                                      ('lib/main.dart', 'lib/perspective.dart',
                                       'lib/layouts.dart', 'lib/exporters.dart',
-                                      'assets/demo/sample_front.jpg')):
+                                      'assets/demo/sample_front.jpg',
+                                      'lib/scan_filters.dart')):
                                   candidates.append((archive, prefix))
                                   print('Eligible native project:', archive, 'root:', prefix)
                                   break
@@ -52,7 +53,7 @@ jobs:
                   print('Not a readable ZIP:', archive, exc)
           if not candidates:
               sys.exit('::error::Native Flutter ZIP not found in current branch. '
-                       'Upload mustamsakati-flutter-v6-native.zip to the SAME branch, without extraction.')
+                       'Upload the mustamsakati Flutter v6.1 ZIP to the SAME branch, without extraction.')
           # Select the greatest numeric pubspec version, so a previous ZIP
           # cannot silently override the corrected project during CI.
           import re
@@ -68,6 +69,9 @@ jobs:
               numbers = tuple(int(n or 0) for n in version_match.groups())
               return (*numbers, archive.name.lower())
           archive, prefix = max(candidates, key=project_rank)
+          chosen_version = project_rank((archive, prefix))[:4]
+          if chosen_version < (6, 1, 0, 1):
+              sys.exit('::error::Flutter project v6.1+ was not found. Upload the new ZIP on this branch.')
           extracted = Path(os.environ['RUNNER_TEMP']) / 'native_unzipped'
           output = Path(os.environ['RUNNER_TEMP']) / 'build_project'
           if extracted.exists():
@@ -196,7 +200,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: mustamsakati-v6-native-apk
+          name: mustamsakati-v6-1-native-apk
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
