@@ -127,6 +127,41 @@ jobs:
           test -f android/settings.gradle.kts -o -f android/settings.gradle
           test -f android/app/src/main/AndroidManifest.xml
 
+      - name: Use smaller Gradle distribution with retries (avoid GitHub 504)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          python3 - <<'PYGRADLE'
+          from pathlib import Path
+          import re
+          import sys
+
+          wrapper = Path('android/gradle/wrapper/gradle-wrapper.properties')
+          if not wrapper.is_file():
+              sys.exit('::error::Gradle wrapper properties not found after flutter create')
+          settings = wrapper.read_text(encoding='utf-8')
+          match = re.search(r'^distributionUrl=.*?/gradle-(\d+(?:\.\d+){1,2})-(?:all|bin)\.zip\s*$', settings, re.M)
+          if not match:
+              print(settings)
+              sys.exit('::error::Unknown Gradle distribution URL. Refusing to guess Gradle version.')
+          version = match.group(1)
+          # Keep the Gradle version selected by Flutter to avoid AGP compatibility issues.
+          url = f'https\\://downloads.gradle.org/distributions/gradle-{version}-bin.zip'
+          settings = re.sub(r'^distributionUrl=.*$', 'distributionUrl=' + url, settings, count=1, flags=re.M)
+          for key, value in [('networkTimeout', '120000'), ('retries', '5'), ('retryBackOffMs', '2000')]:
+              line = f'{key}={value}'
+              if re.search(rf'^{key}=.*$', settings, re.M):
+                  settings = re.sub(rf'^{key}=.*$', line, settings, count=1, flags=re.M)
+              else:
+                  settings = settings.rstrip() + '\n' + line + '\n'
+          wrapper.write_text(settings, encoding='utf-8')
+          print('Gradle version retained:', version)
+          print('New Gradle distribution: https://downloads.gradle.org/distributions/gradle-' + version + '-bin.zip')
+          print('Network timeout and automatic download retries enabled.')
+          PYGRADLE
+          cat android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Install Flutter packages
         shell: bash
         run: |
