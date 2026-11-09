@@ -1,11 +1,11 @@
-name: Build Mustamsakati Flutter Native 8.1.0
+name: Build Mustamsakati Flutter Native 8.2.0
 
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
     paths:
-      - mustamsakati-flutter-v8.1.0-native.zip
+      - mustamsakati-flutter-v8.2.0-native.zip
       - .github/workflows/**
 
 permissions:
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      STUDIO_ZIP: mustamsakati-flutter-v8.1.0-native.zip
+      STUDIO_ZIP: mustamsakati-flutter-v8.2.0-native.zip
     steps:
       - uses: actions/checkout@v5
 
@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export PROJECT_DIR="$RUNNER_TEMP/mustamsakati-native-v8.1.0"
+          export PROJECT_DIR="$RUNNER_TEMP/mustamsakati-native-v8.2.0"
           python3 - <<'PYTHON'
           from pathlib import Path, PurePosixPath
           from zipfile import ZipFile
@@ -39,11 +39,12 @@ jobs:
           with ZipFile(archive) as source:
               entries = source.namelist()
               required = {'pubspec.yaml', 'lib/main.dart', 'lib/vault.dart', 'lib/redaction.dart',
-                          'scripts/validate_source.py', 'lib/camera_capture.dart'}
+                          'scripts/validate_source.py', 'lib/camera_capture.dart',
+                          'lib/quick_card.dart', 'lib/rounded_card.dart'}
               if source.testzip() is not None or not required.issubset(entries) or len(entries) != len(set(entries)):
                   sys.exit('::error::The native Flutter ZIP is incomplete or corrupt.')
-              if 'version: 8.1.0+7' not in source.read('pubspec.yaml').decode('utf-8').splitlines():
-                  sys.exit('::error::The source ZIP is not version 8.1.0+7.')
+              if 'version: 8.2.0+8' not in source.read('pubspec.yaml').decode('utf-8').splitlines():
+                  sys.exit('::error::The source ZIP is not version 8.2.0+8.')
               for item in source.infolist():
                   path = PurePosixPath(item.filename)
                   if path.is_absolute() or '..' in path.parts or chr(92) in item.filename or stat.S_ISLNK(item.external_attr >> 16):
@@ -173,7 +174,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: mustamsakati-v8.1.0-native-apk
+          name: mustamsakati-v8.2.0-native-apk
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
