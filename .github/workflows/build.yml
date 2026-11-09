@@ -20,13 +20,13 @@ jobs:
         shell: bash
     env:
       STUDIO_ZIP: mustamsakati-flutter-v8.0.0.zip
-      PROJECT_DIR: ${{ runner.temp }}/mustamsakati-v8
     steps:
       - uses: actions/checkout@v5
 
       - name: Extract the project ZIP from the repository root
         run: |
           set -euo pipefail
+          export PROJECT_DIR="$RUNNER_TEMP/mustamsakati-v8"
           python3 - <<'PY'
           from pathlib import Path, PurePosixPath
           from zipfile import ZipFile
@@ -53,6 +53,7 @@ jobs:
               target.mkdir(parents=True, exist_ok=True)
               source.extractall(target)
           PY
+          printf 'PROJECT_DIR=%s\n' "$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v5
         with:
