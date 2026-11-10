@@ -148,8 +148,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Eq '^version: 1[.]30[.]6[+]' "$PROJECT_DIR/pubspec.yaml" || {
-            echo '::error::تم اختيار مشروع قديم. ارفع jadwali-school-project-v1.30.7-mobile-settings-reports.zip إلى جذر المستودع.'
+          grep -Eq '^version:[[:space:]]*1[.]30[.]7([+][0-9]+)?[[:space:]]*$' "$PROJECT_DIR/pubspec.yaml" || {
+            echo '::error::إصدار المشروع غير مطابق لـ 1.30.7. راجع pubspec.yaml داخل ZIP.'
             exit 1
           }
           test -f "$PROJECT_DIR/lib/features/timetable/repair_undo_dialog.dart"
@@ -164,7 +164,8 @@ jobs:
           test -f "$PROJECT_DIR/test/grade_day_policy_1304_test.dart"
           test -f "$PROJECT_DIR/lib/core/html_dashboard_hero.dart"
           test -f "$PROJECT_DIR/assets/design/approved-interactive-reference.html"
-          grep -q 'html-right-sidebar' "$PROJECT_DIR/lib/app/app.dart"
+          # Check the new settings button rather than the removed sidebar.
+          grep -q 'top-settings' "$PROJECT_DIR/lib/app/app.dart"
           test -f "$PROJECT_DIR/test/modern_ui_128_test.dart"
           echo 'تم اختيار مصدر جدولي 1.30.7 بواجهة Flutter الحديثة.'
 
