@@ -1,4 +1,4 @@
-name: جدولي 1.30.7 - إعدادات الهاتف وتقارير المعلمين
+name: جدولي 1.30.8 - إعدادات الهاتف وتقارير المعلمين
 
 on:
   push:
@@ -33,9 +33,9 @@ jobs:
           import zipfile
           
           ROOT = Path(os.environ['GITHUB_WORKSPACE']).resolve()
-          TARGET = '1.30.7'
+          TARGET = '1.30.8'
           STAGE = ROOT / '.build_source'
-          VERSION = re.compile(r'(?m)^version:\s*1\.30\.7(?:\+\d+)?\s*$')
+          VERSION = re.compile(r'(?m)^version:\s*1\.30\.8(?:\+\d+)?\s*$')
           
           
           def valid_project(where: Path) -> bool:
@@ -104,9 +104,9 @@ jobs:
           archives = [p for p in ROOT.glob('*.zip') if p.is_file()]
           def priority(p: Path) -> tuple[int, str]:
               n = p.name.lower()
-              if n.startswith('jadwali-school-project-v1.30.7'):
+              if n.startswith('jadwali-school-project-v1.30.8'):
                   return (0, n)
-              if n.startswith('jadwali-project-and-build-v1.30.7'):
+              if n.startswith('jadwali-project-and-build-v1.30.8'):
                   return (1, n)
               return (2, n)
           archives.sort(key=priority)
@@ -125,12 +125,12 @@ jobs:
                       break
           
           if not project:
-              print('::error::ملفات المشروع غير مرفوعة أو الإصدار غير صحيح. ارفع ZIP مشروع جدولي 1.30.7 نفسه إلى جذر المستودع (Add file > Upload files > Commit changes) ثم أعد تشغيل Actions.')
+              print('::error::ملفات المشروع غير مرفوعة أو الإصدار غير صحيح. ارفع ZIP مشروع جدولي 1.30.8 نفسه إلى جذر المستودع (Add file > Upload files > Commit changes) ثم أعد تشغيل Actions.')
               print('الملفات الموجودة في جذر الفرع:', flush=True)
               for item in sorted(ROOT.iterdir()):
                   if item.name != '.git':
                       print('  ' + item.name)
-              print('يجب أن يتضمن المشروع pubspec.yaml وlib/main.dart وandroid/ وأن يكون إصداره 1.30.7.')
+              print('يجب أن يتضمن المشروع pubspec.yaml وlib/main.dart وandroid/ وأن يكون إصداره 1.30.8.')
               sys.exit(1)
           
           relative = project.relative_to(ROOT).as_posix()
@@ -144,12 +144,12 @@ jobs:
           print('✅ الإصدار مطابق:', TARGET, flush=True)
           JADWALI_PROJECT_DETECTOR
 
-      - name: التحقق من اختيار إصدار الواجهة الحديثة 1.30.7
+      - name: التحقق من اختيار إصدار الواجهة الحديثة 1.30.8
         shell: bash
         run: |
           set -euo pipefail
-          grep -Eq '^version:[[:space:]]*1[.]30[.]7([+][0-9]+)?[[:space:]]*$' "$PROJECT_DIR/pubspec.yaml" || {
-            echo '::error::إصدار المشروع غير مطابق لـ 1.30.7. راجع pubspec.yaml داخل ZIP.'
+          grep -Eq '^version:[[:space:]]*1[.]30[.]8([+][0-9]+)?[[:space:]]*$' "$PROJECT_DIR/pubspec.yaml" || {
+            echo '::error::إصدار المشروع غير مطابق لـ 1.30.8. راجع pubspec.yaml داخل ZIP.'
             exit 1
           }
           test -f "$PROJECT_DIR/lib/features/timetable/repair_undo_dialog.dart"
@@ -167,7 +167,7 @@ jobs:
           # Check the new settings button rather than the removed sidebar.
           grep -q 'top-settings' "$PROJECT_DIR/lib/app/app.dart"
           test -f "$PROJECT_DIR/test/modern_ui_128_test.dart"
-          echo 'تم اختيار مصدر جدولي 1.30.7 بواجهة Flutter الحديثة.'
+          echo 'تم اختيار مصدر جدولي 1.30.8 بواجهة Flutter الحديثة.'
 
       - name: اختبار القيود والإتاحة على نسخة المدرسة المجهولة الأسماء
         shell: bash
@@ -385,6 +385,10 @@ jobs:
             lib/features/notifications/jadwali_notification_center.dart \
             lib/services/schedule_integrity_audit.dart \
             lib/services/schedule_improvement_service.dart \
+            lib/services/section_time_domain_flow.dart \
+            lib/services/auto_scheduler_service.dart \
+            lib/services/constraint_explanation_service.dart \
+            lib/services/reference_office_service.dart \
             lib/services/schedule_search_controller.dart \
             lib/features/setup/grade_daily_lessons_page.dart \
             lib/features/data_management/requirements_matrix.dart \
@@ -395,6 +399,7 @@ jobs:
             lib/features/timetable/timetable_page.dart \
             test/app_navigation_test.dart \
             test/approved_html_look_test.dart \
+            test/section_time_domain_flow_1308_test.dart \
             test/grade_daily_interaction_130_test.dart \
             test/grade_day_policy_1304_test.dart \
             test/dark_preview_130_test.dart \
@@ -443,6 +448,7 @@ jobs:
             test/app_navigation_test.dart \
             test/report_and_weekly_swap_test.dart \
             test/workload_report_colors_1307_test.dart \
+            test/section_time_domain_flow_1308_test.dart \
             2>&1 | tee -a "$GITHUB_WORKSPACE/jadwali-tests.log"
 
       - name: إعادة فحص أسباب الإخفاقات الثمانية
